@@ -8,13 +8,18 @@ pub struct TemplateApp {
     #[serde(skip)]
     time: wasm_timer::SystemTime,
 
-
     #[serde(skip)]
     button_click_time: wasm_timer::SystemTime,
 
+    #[serde(skip)]
     prev_difference: f64,
+
+    #[serde(skip)]
     frames: i32,
+
+    #[serde(skip)]
     bpm: f64,
+
     bpm_target: i32,
     epsilon: i32,
 
@@ -68,6 +73,7 @@ impl eframe::App for TemplateApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.label("test");
+            // ui.label("test");
             ui.heading(format!("{}", delta));
 
 
@@ -111,12 +117,10 @@ impl eframe::App for TemplateApp {
             egui::warn_if_debug_build(ui);
         });
 
-        if false {
-            egui::Window::new("Window").show(ctx, |ui| {
-                ui.label("Windows can be moved by dragging them.");
-                ui.label("They are automatically sized based on contents.");
-                ui.label("You can turn on resizing and scrolling if you like.");
-                ui.label("You would normally chose either panels OR windows.");
+        if true {
+            egui::Window::new("test").show(ctx, |ui| {
+                ui.label("This is a test window.");
+
             });
         }
 
