@@ -1,21 +1,35 @@
+use eframe::epaint::{Color32, Pos2, Rect, Rounding, Stroke};
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    // Example stuff:
-    label: String,
 
-    // this how you opt-out of serialization of a member
     #[serde(skip)]
-    value: f32,
+    time: wasm_timer::SystemTime,
+
+
+    #[serde(skip)]
+    button_click_time: wasm_timer::SystemTime,
+
+    prev_difference: f64,
+    frames: i32,
+    bpm: f64,
+    bpm_target: i32,
+    epsilon: i32,
+
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            time: wasm_timer::SystemTime::now(),
+            frames: 0,
+            button_click_time: wasm_timer::SystemTime::now(),
+            prev_difference: 0.0,
+            bpm: 0.0,
+            bpm_target: 120,
+            epsilon: 80,
         }
     }
 }
@@ -45,62 +59,55 @@ impl eframe::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let Self { label, value } = self;
+        let Self { .. } = self;
+        let now = wasm_timer::SystemTime::now();
+        let delta = now.duration_since(self.time).unwrap_or_default().as_secs_f64();
 
-        // Examples of how to create different panels and windows.
-        // Pick whichever suits you.
-        // Tip: a good default choice is to just keep the `CentralPanel`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
-
-        #[cfg(not(target_arch = "wasm32"))] // no File->Quit on web pages!
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        _frame.close();
-                    }
-                });
-            });
-        });
-
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Side Panel");
-
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(label);
-            });
-
-            ui.add(egui::Slider::new(value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                *value += 1.0;
-            }
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.label("powered by ");
-                    ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-                    ui.label(" and ");
-                    ui.hyperlink_to(
-                        "eframe",
-                        "https://github.com/emilk/egui/tree/master/crates/eframe",
-                    );
-                    ui.label(".");
-                });
-            });
-        });
+        ctx.request_repaint();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
+            ui.label("test");
+            ui.heading(format!("{}", delta));
 
-            ui.heading("eframe template");
-            ui.hyperlink("https://github.com/emilk/eframe_template");
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/master/",
-                "Source code."
-            ));
+
+            ui.label(format!("{:?}", self.time));
+
+            let prev_button_click = self.button_click_time;
+
+            if ui.button("click").clicked() {
+
+                self.button_click_time = wasm_timer::SystemTime::now();
+
+                let difference = {
+                    self.button_click_time.duration_since(prev_button_click).unwrap_or_default().as_nanos() as f64 / 1_000_000 as f64
+                };
+                println!("difference: {}", difference);
+                self.prev_difference = difference;
+                self.bpm = 60_000.0 / difference;
+                println!("{}", self.bpm);
+            }
+
+            ui.label("Leeway: ");
+            ui.add(egui::Slider::new(&mut self.epsilon,0..=200));
+            ui.label("BPM Target: ");
+            ui.add(egui::Slider::new(&mut self.bpm_target,100..=300));
+
+
+            let difference_check:i128 = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
+            let bpm_ms = 60_000 / self.bpm_target; // 500 ms?
+
+            if (difference_check - (bpm_ms - (self.epsilon/2)) as i128).abs() < self.epsilon as i128 {
+                let rect = Rect::from_two_pos(Pos2::new(200.0,200.0),Pos2::new(300.0,300.0));
+                ui.painter().rect(rect,Rounding::default(),Color32::from_rgb(250,50,50),Stroke::default());
+            }
+
+            ui.label(format!("BPM: {:.0}",self.bpm));
+            // 60,000 / 120 = 500 ms per beat
+            // 1 ms = 1,000,000 nanos
+
+            //
+
             egui::warn_if_debug_build(ui);
         });
 
@@ -112,5 +119,13 @@ impl eframe::App for TemplateApp {
                 ui.label("You would normally chose either panels OR windows.");
             });
         }
+
+        if self.frames > 60 {
+            self.frames = 0;
+        }
+
+        self.frames = self.frames + 1;
+
+        self.time = wasm_timer::SystemTime::now();
     }
 }
