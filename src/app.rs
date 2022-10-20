@@ -5,7 +5,6 @@ use eframe::epaint::{Color32, FontId, Pos2, Rect, Rounding, Stroke};
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-
     #[serde(skip)]
     time: wasm_timer::SystemTime,
 
@@ -27,9 +26,8 @@ pub struct TemplateApp {
     bpm_target: i32,
     epsilon: i32,
     prev_bpm_store_count: usize,
-    
-    displaying_indicator: bool,
 
+    displaying_indicator: bool,
 }
 
 impl Default for TemplateApp {
@@ -44,7 +42,7 @@ impl Default for TemplateApp {
             bpm_target: 120,
             epsilon: 80,
             prev_bpm_store_count: 10,
-            displaying_indicator: true
+            displaying_indicator: true,
         }
     }
 }
@@ -76,18 +74,20 @@ impl eframe::App for TemplateApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let Self { .. } = self;
         let now = wasm_timer::SystemTime::now();
-        let delta = now.duration_since(self.time).unwrap_or_default().as_secs_f64();
+        let delta = now
+            .duration_since(self.time)
+            .unwrap_or_default()
+            .as_secs_f64();
 
         ctx.request_repaint();
 
         #[cfg(debug_assertions)]
         let mousepos = match ctx.pointer_hover_pos() {
-            None => {Pos2::new(0.0,0.0)}
-            Some(a) => {a}
+            None => Pos2::new(0.0, 0.0),
+            Some(a) => a,
         };
 
         egui::CentralPanel::default().show(ctx, |ui| {
-
             ui.heading(format!("Frame time: {:.05} seconds", delta));
 
             #[cfg(debug_assertions)]
@@ -95,14 +95,17 @@ impl eframe::App for TemplateApp {
 
             let prev_button_click = self.button_click_time;
 
-            let big_button = ui.add_sized([100.0,50.0],egui::Button::new("Click"));
+            let big_button = ui.add_sized([100.0, 50.0], egui::Button::new("Click"));
 
             if big_button.clicked() {
-
                 self.button_click_time = wasm_timer::SystemTime::now();
 
                 let difference = {
-                    self.button_click_time.duration_since(prev_button_click).unwrap_or_default().as_nanos() as f64 / 1_000_000 as f64
+                    self.button_click_time
+                        .duration_since(prev_button_click)
+                        .unwrap_or_default()
+                        .as_nanos() as f64
+                        / 1_000_000 as f64
                 };
 
                 println!("difference: {}", difference);
@@ -115,106 +118,93 @@ impl eframe::App for TemplateApp {
             ui.horizontal(|ui| {
                 ui.label("Leeway:");
                 ui.add_space(24.25);
-                ui.add(egui::Slider::new(
-                    &mut self.epsilon,
-                    0..=200)).on_hover_text(
-                    "The length of time to show the green indicator and click text."
-                );
+                ui.add(egui::Slider::new(&mut self.epsilon, 0..=200))
+                    .on_hover_text(
+                        "The length of time to show the green indicator and click text.",
+                    );
             });
 
             ui.horizontal(|ui| {
                 ui.label("BPM Target:");
-                ui.add(egui::Slider::new(
-                    &mut self.bpm_target,
-                    100..=300)).on_hover_text(
-                    "The bpm to show the indicator at."
-                );
+                ui.add(egui::Slider::new(&mut self.bpm_target, 100..=300))
+                    .on_hover_text("The bpm to show the indicator at.");
             });
 
             ui.horizontal(|ui| {
                 ui.label("Avg Count:");
                 ui.add_space(8.0);
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.prev_bpm_store_count,
-                        2..=50)).on_hover_text(
-                    "The number of bpm ratings to keep to calculate the average."
-                );
+                ui.add(egui::Slider::new(&mut self.prev_bpm_store_count, 2..=50))
+                    .on_hover_text("The number of bpm ratings to keep to calculate the average.");
             });
 
-            ui.checkbox(&mut self.displaying_indicator,"Display indicator: ");
+            ui.checkbox(&mut self.displaying_indicator, "Display indicator: ");
 
-            let difference_check:i128 = {
+            let difference_check: i128 = {
                 let output = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
                 if output > 10_000 {
                     10_000
-                } else { output }
+                } else {
+                    output
+                }
             };
 
             let bpm_ms = 60_000 / self.bpm_target; // 500 ms?
 
             let click_offset = 300.0;
 
-            let x: f32 = {
-                bpm_ms - difference_check as i32 + click_offset as i32
-            } as f32;
+            let x: f32 = { bpm_ms - difference_check as i32 + click_offset as i32 } as f32;
 
             // rectangle object for the indicator bar, moves from right to left of screen towards the click rect.
-            let indicator_rect = Rect::from_two_pos(
-                Pos2::new(x,200.0),
-                Pos2::new(x + 10.0,300.0)
-            );
+            let indicator_rect =
+                Rect::from_two_pos(Pos2::new(x, 200.0), Pos2::new(x + 10.0, 300.0));
 
             // rectangle to show where the indicator needs to be to click the button
             let click_rect = Rect::from_two_pos(
                 Pos2::new(click_offset, 200.0),
-                Pos2::new(click_offset + 5.0, 300.0)
+                Pos2::new(click_offset + 5.0, 300.0),
             );
 
-
-
             if self.displaying_indicator {
-
                 ui.painter().rect(
                     click_rect,
                     Rounding::default(),
-                    Color32::from_rgb(50,50,50),
-                    Stroke::default()
+                    Color32::from_rgb(50, 50, 50),
+                    Stroke::default(),
                 );
 
                 ui.painter().rect(
                     indicator_rect,
                     Rounding::default(),
-                    Color32::from_rgb(250,50,50),
-                    Stroke::default()
+                    Color32::from_rgb(250, 50, 50),
+                    Stroke::default(),
                 );
-
             }
 
-            if (difference_check - (bpm_ms - (self.epsilon/2)) as i128).abs() < self.epsilon as i128 && self.displaying_indicator {
-
+            if (difference_check - (bpm_ms - (self.epsilon / 2)) as i128).abs()
+                < self.epsilon as i128
+                && self.displaying_indicator
+            {
                 let rect = Rect::from_two_pos(
-                    Pos2::new(click_offset,200.0),
-                    Pos2::new(click_offset + 5.0,300.0)
+                    Pos2::new(click_offset, 200.0),
+                    Pos2::new(click_offset + 5.0, 300.0),
                 );
 
                 ui.painter().rect(
                     rect,
                     Rounding::default(),
-                    Color32::from_rgb(50,200,50),
-                    Stroke::default()
+                    Color32::from_rgb(50, 200, 50),
+                    Stroke::default(),
                 );
                 ui.painter().text(
                     Pos2::new(click_offset, 180.0),
                     Align2::CENTER_BOTTOM,
                     "Click now!",
                     FontId::default(),
-                    Color32::from_rgb(250,250,250)
+                    Color32::from_rgb(250, 250, 250),
                 );
-
             }
 
-            ui.label(format!("Previous BPM: {:.0}",self.bpm));
+            ui.label(format!("Previous BPM: {:.0}", self.bpm));
 
             let mut avg: f32 = 0.0;
 
@@ -225,7 +215,7 @@ impl eframe::App for TemplateApp {
             avg /= self.previous_bpm_ratings.len() as f32;
 
             if !avg.is_nan() {
-                ui.label(format!("BPM Avg: {:.0}",avg));
+                ui.label(format!("BPM Avg: {:.0}", avg));
             }
             // 60,000 / 120 = 500 ms per beat
             // 1 ms = 1,000,000 nanos
@@ -238,9 +228,8 @@ impl eframe::App for TemplateApp {
                 self.previous_bpm_ratings.remove(0);
             }
 
-
             #[cfg(debug_assertions)]
-            ui.label(format!("{:?}",mousepos));
+            ui.label(format!("{:?}", mousepos));
             #[cfg(debug_assertions)]
             ui.label(format!("{}, {}", x, difference_check));
 
@@ -250,7 +239,6 @@ impl eframe::App for TemplateApp {
         if false {
             egui::Window::new("test").show(ctx, |ui| {
                 ui.label("This is a test window.");
-
             });
         }
 
