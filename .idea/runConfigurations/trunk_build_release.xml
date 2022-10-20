@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="trunk serve" type="ShConfigurationType">
-    <option name="SCRIPT_TEXT" value="trunk serve --address 10.0.0.182" />
+  <configuration default="false" name="trunk build release" type="ShConfigurationType">
+    <option name="SCRIPT_TEXT" value="trunk build --release" />
     <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
     <option name="SCRIPT_PATH" value="" />
     <option name="SCRIPT_OPTIONS" value="" />

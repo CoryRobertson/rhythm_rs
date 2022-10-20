@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Full Deploy" type="CompoundRunConfigurationType">
+    <toRun name="Dockerfile BUILDONLY" type="docker-deploy" />
+    <toRun name="trunk build release" type="ShConfigurationType" />
+    <method v="2" />
+  </configuration>
+</component>
