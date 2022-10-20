@@ -7,12 +7,15 @@ fn main() {
     // Log to stdout (if you run with `RUST_LOG=debug`).
     tracing_subscriber::fmt::init();
 
-    let mut native_options = eframe::NativeOptions::default();
+    let native_options = eframe::NativeOptions {
+        vsync: false,
+        ..Default::default()
+    };
 
-    native_options.vsync = false;
+    // native_options.vsync = false;
 
     eframe::run_native(
-        "eframe template",
+        "Rhythm Rs",
         native_options,
         Box::new(|cc| Box::new(rhythm_rs::TemplateApp::new(cc))),
     );

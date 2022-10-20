@@ -105,7 +105,7 @@ impl eframe::App for TemplateApp {
                         .duration_since(prev_button_click)
                         .unwrap_or_default()
                         .as_nanos() as f64
-                        / 1_000_000 as f64
+                        / 1_000_000_f64
                 };
 
                 println!("difference: {}", difference);
@@ -246,7 +246,7 @@ impl eframe::App for TemplateApp {
             self.frames = 0;
         }
 
-        self.frames = self.frames + 1;
+        self.frames += 1;
 
         self.time = wasm_timer::SystemTime::now();
     }
