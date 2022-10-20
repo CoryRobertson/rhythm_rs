@@ -27,6 +27,8 @@ pub struct TemplateApp {
     bpm_target: i32,
     epsilon: i32,
     prev_bpm_store_count: usize,
+    
+    displaying_indicator: bool,
 
 }
 
@@ -41,7 +43,8 @@ impl Default for TemplateApp {
             previous_bpm_ratings: vec![],
             bpm_target: 120,
             epsilon: 80,
-            prev_bpm_store_count: 10
+            prev_bpm_store_count: 10,
+            displaying_indicator: true
         }
     }
 }
@@ -77,18 +80,17 @@ impl eframe::App for TemplateApp {
 
         ctx.request_repaint();
 
+        #[cfg(debug_assertions)]
         let mousepos = match ctx.pointer_hover_pos() {
             None => {Pos2::new(0.0,0.0)}
             Some(a) => {a}
         };
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.label("987654321");
-            // ui.label("test");
-            ui.heading(format!("{}", delta));
 
+            ui.heading(format!("Frame time: {:.05} seconds", delta));
 
+            #[cfg(debug_assertions)]
             ui.label(format!("{:?}", self.time));
 
             let prev_button_click = self.button_click_time;
@@ -113,21 +115,34 @@ impl eframe::App for TemplateApp {
             ui.horizontal(|ui| {
                 ui.label("Leeway:");
                 ui.add_space(24.25);
-                ui.add(egui::Slider::new(&mut self.epsilon,0..=200)).on_hover_text("The length of time to show the green indicator and click text.");
+                ui.add(egui::Slider::new(
+                    &mut self.epsilon,
+                    0..=200)).on_hover_text(
+                    "The length of time to show the green indicator and click text."
+                );
             });
 
             ui.horizontal(|ui| {
                 ui.label("BPM Target:");
-                ui.add(egui::Slider::new(&mut self.bpm_target,100..=300)).on_hover_text("The bpm to show the indicator at.");
+                ui.add(egui::Slider::new(
+                    &mut self.bpm_target,
+                    100..=300)).on_hover_text(
+                    "The bpm to show the indicator at."
+                );
             });
 
             ui.horizontal(|ui| {
                 ui.label("Avg Count:");
                 ui.add_space(8.0);
-                ui.add(egui::Slider::new(&mut self.prev_bpm_store_count,2..=50)).on_hover_text("The number of bpm ratings to keep to calculate the average.");
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.prev_bpm_store_count,
+                        2..=50)).on_hover_text(
+                    "The number of bpm ratings to keep to calculate the average."
+                );
             });
 
-
+            ui.checkbox(&mut self.displaying_indicator,"Display indicator: ");
 
             let difference_check:i128 = {
                 let output = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
@@ -156,20 +171,39 @@ impl eframe::App for TemplateApp {
                 Pos2::new(click_offset + 5.0, 300.0)
             );
 
-            ui.label(format!("{}, {}", x, difference_check));
 
-            ui.painter().rect(click_rect,Rounding::default(),Color32::from_rgb(50,50,50),Stroke::default());
 
-            ui.painter().rect(indicator_rect,Rounding::default(),Color32::from_rgb(250,50,50),Stroke::default());
+            if self.displaying_indicator {
 
-            if (difference_check - (bpm_ms - (self.epsilon/2)) as i128).abs() < self.epsilon as i128 {
+                ui.painter().rect(
+                    click_rect,
+                    Rounding::default(),
+                    Color32::from_rgb(50,50,50),
+                    Stroke::default()
+                );
+
+                ui.painter().rect(
+                    indicator_rect,
+                    Rounding::default(),
+                    Color32::from_rgb(250,50,50),
+                    Stroke::default()
+                );
+
+            }
+
+            if (difference_check - (bpm_ms - (self.epsilon/2)) as i128).abs() < self.epsilon as i128 && self.displaying_indicator {
 
                 let rect = Rect::from_two_pos(
                     Pos2::new(click_offset,200.0),
                     Pos2::new(click_offset + 5.0,300.0)
                 );
 
-                ui.painter().rect(rect,Rounding::default(),Color32::from_rgb(50,200,50),Stroke::default());
+                ui.painter().rect(
+                    rect,
+                    Rounding::default(),
+                    Color32::from_rgb(50,200,50),
+                    Stroke::default()
+                );
                 ui.painter().text(
                     Pos2::new(click_offset, 180.0),
                     Align2::CENTER_BOTTOM,
@@ -187,8 +221,12 @@ impl eframe::App for TemplateApp {
             for rating in &self.previous_bpm_ratings {
                 avg += rating;
             }
+
             avg /= self.previous_bpm_ratings.len() as f32;
-            ui.label(format!("BPM Avg: {:.0}",avg));
+
+            if !avg.is_nan() {
+                ui.label(format!("BPM Avg: {:.0}",avg));
+            }
             // 60,000 / 120 = 500 ms per beat
             // 1 ms = 1,000,000 nanos
 
@@ -200,8 +238,13 @@ impl eframe::App for TemplateApp {
                 self.previous_bpm_ratings.remove(0);
             }
 
-            egui::warn_if_debug_build(ui);
+
+            #[cfg(debug_assertions)]
             ui.label(format!("{:?}",mousepos));
+            #[cfg(debug_assertions)]
+            ui.label(format!("{}, {}", x, difference_check));
+
+            egui::warn_if_debug_build(ui);
         });
 
         if false {
