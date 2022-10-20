@@ -1,4 +1,5 @@
-use eframe::epaint::{Color32, Pos2, Rect, Rounding, Stroke};
+use eframe::emath::Align2;
+use eframe::epaint::{Color32, FontId, Pos2, Rect, Rounding, Stroke};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -20,8 +21,12 @@ pub struct TemplateApp {
     #[serde(skip)]
     bpm: f64,
 
+    #[serde(skip)]
+    previous_bpm_ratings: Vec<f32>,
+
     bpm_target: i32,
     epsilon: i32,
+    prev_bpm_store_count: usize,
 
 }
 
@@ -33,8 +38,10 @@ impl Default for TemplateApp {
             button_click_time: wasm_timer::SystemTime::now(),
             prev_difference: 0.0,
             bpm: 0.0,
+            previous_bpm_ratings: vec![],
             bpm_target: 120,
             epsilon: 80,
+            prev_bpm_store_count: 10
         }
     }
 }
@@ -70,9 +77,14 @@ impl eframe::App for TemplateApp {
 
         ctx.request_repaint();
 
+        let mousepos = match ctx.pointer_hover_pos() {
+            None => {Pos2::new(0.0,0.0)}
+            Some(a) => {a}
+        };
+
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.label("Hello noah and will");
+            ui.label("987654321");
             // ui.label("test");
             ui.heading(format!("{}", delta));
 
@@ -81,43 +93,118 @@ impl eframe::App for TemplateApp {
 
             let prev_button_click = self.button_click_time;
 
-            if ui.button("click").clicked() {
+            let big_button = ui.add_sized([100.0,50.0],egui::Button::new("Click"));
+
+            if big_button.clicked() {
 
                 self.button_click_time = wasm_timer::SystemTime::now();
 
                 let difference = {
                     self.button_click_time.duration_since(prev_button_click).unwrap_or_default().as_nanos() as f64 / 1_000_000 as f64
                 };
+
                 println!("difference: {}", difference);
                 self.prev_difference = difference;
                 self.bpm = 60_000.0 / difference;
                 println!("{}", self.bpm);
+                self.previous_bpm_ratings.push(self.bpm as f32);
             }
 
-            ui.label("Leeway: ");
-            ui.add(egui::Slider::new(&mut self.epsilon,0..=200));
-            ui.label("BPM Target: ");
-            ui.add(egui::Slider::new(&mut self.bpm_target,100..=300));
+            ui.horizontal(|ui| {
+                ui.label("Leeway:");
+                ui.add_space(24.25);
+                ui.add(egui::Slider::new(&mut self.epsilon,0..=200)).on_hover_text("The length of time to show the green indicator and click text.");
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("BPM Target:");
+                ui.add(egui::Slider::new(&mut self.bpm_target,100..=300)).on_hover_text("The bpm to show the indicator at.");
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Avg Count:");
+                ui.add_space(8.0);
+                ui.add(egui::Slider::new(&mut self.prev_bpm_store_count,2..=50)).on_hover_text("The number of bpm ratings to keep to calculate the average.");
+            });
 
 
-            let difference_check:i128 = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
+
+            let difference_check:i128 = {
+                let output = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
+                if output > 10_000 {
+                    10_000
+                } else { output }
+            };
+
             let bpm_ms = 60_000 / self.bpm_target; // 500 ms?
 
+            let click_offset = 300.0;
+
+            let x: f32 = {
+                bpm_ms - difference_check as i32 + click_offset as i32
+            } as f32;
+
+            // rectangle object for the indicator bar, moves from right to left of screen towards the click rect.
+            let indicator_rect = Rect::from_two_pos(
+                Pos2::new(x,200.0),
+                Pos2::new(x + 10.0,300.0)
+            );
+
+            // rectangle to show where the indicator needs to be to click the button
+            let click_rect = Rect::from_two_pos(
+                Pos2::new(click_offset, 200.0),
+                Pos2::new(click_offset + 5.0, 300.0)
+            );
+
+            ui.label(format!("{}, {}", x, difference_check));
+
+            ui.painter().rect(click_rect,Rounding::default(),Color32::from_rgb(50,50,50),Stroke::default());
+
+            ui.painter().rect(indicator_rect,Rounding::default(),Color32::from_rgb(250,50,50),Stroke::default());
+
             if (difference_check - (bpm_ms - (self.epsilon/2)) as i128).abs() < self.epsilon as i128 {
-                let rect = Rect::from_two_pos(Pos2::new(200.0,200.0),Pos2::new(300.0,300.0));
-                ui.painter().rect(rect,Rounding::default(),Color32::from_rgb(250,50,50),Stroke::default());
+
+                let rect = Rect::from_two_pos(
+                    Pos2::new(click_offset,200.0),
+                    Pos2::new(click_offset + 5.0,300.0)
+                );
+
+                ui.painter().rect(rect,Rounding::default(),Color32::from_rgb(50,200,50),Stroke::default());
+                ui.painter().text(
+                    Pos2::new(click_offset, 180.0),
+                    Align2::CENTER_BOTTOM,
+                    "Click now!",
+                    FontId::default(),
+                    Color32::from_rgb(250,250,250)
+                );
+
             }
 
-            ui.label(format!("BPM: {:.0}",self.bpm));
+            ui.label(format!("Previous BPM: {:.0}",self.bpm));
+
+            let mut avg: f32 = 0.0;
+
+            for rating in &self.previous_bpm_ratings {
+                avg += rating;
+            }
+            avg /= self.previous_bpm_ratings.len() as f32;
+            ui.label(format!("BPM Avg: {:.0}",avg));
             // 60,000 / 120 = 500 ms per beat
             // 1 ms = 1,000,000 nanos
 
-            //
+            if ui.button("Reset Average").clicked() {
+                self.previous_bpm_ratings.clear();
+            }
+
+            if self.previous_bpm_ratings.len() > self.prev_bpm_store_count {
+                self.previous_bpm_ratings.remove(0);
+            }
 
             egui::warn_if_debug_build(ui);
+            ui.label(format!("{:?}",mousepos));
         });
 
-        if true {
+        if false {
             egui::Window::new("test").show(ctx, |ui| {
                 ui.label("This is a test window.");
 
