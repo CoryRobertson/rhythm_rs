@@ -21,6 +21,9 @@ pub struct TemplateApp {
     bpm: f64,
 
     #[serde(skip)]
+    beat_count: i32,
+
+    #[serde(skip)]
     previous_bpm_ratings: Vec<f32>,
 
     bpm_target: i32,
@@ -28,6 +31,12 @@ pub struct TemplateApp {
     prev_bpm_store_count: usize,
 
     displaying_indicator: bool,
+}
+
+struct BeatClick {
+    bpm: f32,
+    was_displaying_indicator: bool,
+    time_of_beat: wasm_timer::SystemTime,
 }
 
 impl Default for TemplateApp {
@@ -38,6 +47,7 @@ impl Default for TemplateApp {
             button_click_time: wasm_timer::SystemTime::now(),
             prev_difference: 0.0,
             bpm: 0.0,
+            beat_count: 0,
             previous_bpm_ratings: vec![],
             bpm_target: 120,
             epsilon: 80,
@@ -91,12 +101,16 @@ impl eframe::App for TemplateApp {
             ui.heading(format!("Frame time: {:.05} seconds", delta));
 
             #[cfg(debug_assertions)]
-            ui.label(format!("{:?}", self.time));
+            ui.label(format!("DEBUG Time: {:?}", self.time));
+
+            #[cfg(debug_assertions)]
+            ui.label(format!("DEBUG Beat count: {}", self.beat_count));
 
             let prev_button_click = self.button_click_time;
 
             let big_button = ui.add_sized([100.0, 50.0], egui::Button::new("Click"));
 
+            // button for player to click to detect bpm of click rate
             if big_button.clicked() {
                 self.button_click_time = wasm_timer::SystemTime::now();
 
@@ -113,6 +127,17 @@ impl eframe::App for TemplateApp {
                 self.bpm = 60_000.0 / difference;
                 println!("{}", self.bpm);
                 self.previous_bpm_ratings.push(self.bpm as f32);
+                self.beat_count += 1;
+
+            }
+
+
+            // only display indicator if they havnt clicked 10 beats yet
+            self.displaying_indicator = self.beat_count < 10;
+
+            // reset beat count if they haven't clicked for a while
+            if self.time.duration_since(self.button_click_time).unwrap_or_default().as_secs() > 4 {
+                self.beat_count = 0;
             }
 
             ui.horizontal(|ui| {
@@ -137,7 +162,12 @@ impl eframe::App for TemplateApp {
                     .on_hover_text("The number of bpm ratings to keep to calculate the average.");
             });
 
-            ui.checkbox(&mut self.displaying_indicator, "Display indicator: ");
+            if ui.button("Reset").clicked() {
+                self.beat_count = 0;
+                self.previous_bpm_ratings.clear();
+            }
+
+            //ui.checkbox(&mut self.displaying_indicator, "Display indicator: ");
 
             let difference_check: i128 = {
                 let output = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
@@ -204,7 +234,8 @@ impl eframe::App for TemplateApp {
                 );
             }
 
-            ui.label(format!("Previous BPM: {:.0}", self.bpm));
+            #[cfg(debug_assertions)]
+            ui.label(format!("DEBUG Previous BPM: {:.0}", self.bpm));
 
             let mut avg: f32 = 0.0;
 
@@ -217,21 +248,19 @@ impl eframe::App for TemplateApp {
             if !avg.is_nan() {
                 ui.label(format!("BPM Avg: {:.0}", avg));
             }
+
             // 60,000 / 120 = 500 ms per beat
             // 1 ms = 1,000,000 nanos
 
-            if ui.button("Reset Average").clicked() {
-                self.previous_bpm_ratings.clear();
-            }
 
             if self.previous_bpm_ratings.len() > self.prev_bpm_store_count {
                 self.previous_bpm_ratings.remove(0);
             }
 
             #[cfg(debug_assertions)]
-            ui.label(format!("{:?}", mousepos));
+            ui.label(format!("DEBUG mousepos: {:?}", mousepos));
             #[cfg(debug_assertions)]
-            ui.label(format!("{}, {}", x, difference_check));
+            ui.label(format!("DEBUG x cord: {}, DEBUG diff check: {}", x, difference_check));
 
             egui::warn_if_debug_build(ui);
         });
