@@ -1,5 +1,6 @@
 use eframe::emath::Align2;
 use eframe::epaint::{Color32, FontId, Pos2, Rect, Rounding, Stroke};
+use egui::plot::{HLine, Line, Plot, PlotPoints};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -24,7 +25,7 @@ pub struct TemplateApp {
     beat_count: i32,
 
     #[serde(skip)]
-    previous_bpm_ratings: Vec<f32>,
+    previous_bpm_ratings: Vec<BeatClick>,
 
     bpm_target: i32,
     epsilon: i32,
@@ -126,17 +127,25 @@ impl eframe::App for TemplateApp {
                 self.prev_difference = difference;
                 self.bpm = 60_000.0 / difference;
                 println!("{}", self.bpm);
-                self.previous_bpm_ratings.push(self.bpm as f32);
+                self.previous_bpm_ratings.push(BeatClick {
+                    bpm: self.bpm as f32,
+                    was_displaying_indicator: self.displaying_indicator,
+                    time_of_beat: self.button_click_time,
+                });
                 self.beat_count += 1;
-
             }
-
 
             // only display indicator if they havnt clicked 10 beats yet
             self.displaying_indicator = self.beat_count < 10;
 
             // reset beat count if they haven't clicked for a while
-            if self.time.duration_since(self.button_click_time).unwrap_or_default().as_secs() > 4 {
+            if self
+                .time
+                .duration_since(self.button_click_time)
+                .unwrap_or_default()
+                .as_secs()
+                > 4
+            {
                 self.beat_count = 0;
             }
 
@@ -155,12 +164,12 @@ impl eframe::App for TemplateApp {
                     .on_hover_text("The bpm to show the indicator at.");
             });
 
-            ui.horizontal(|ui| {
-                ui.label("Avg Count:");
-                ui.add_space(8.0);
-                ui.add(egui::Slider::new(&mut self.prev_bpm_store_count, 2..=50))
-                    .on_hover_text("The number of bpm ratings to keep to calculate the average.");
-            });
+            // ui.horizontal(|ui| {
+            //     ui.label("Avg Count:");
+            //     ui.add_space(8.0);
+            //     ui.add(egui::Slider::new(&mut self.prev_bpm_store_count, 2..=50))
+            //         .on_hover_text("The number of bpm ratings to keep to calculate the average.");
+            // });
 
             if ui.button("Reset").clicked() {
                 self.beat_count = 0;
@@ -240,7 +249,7 @@ impl eframe::App for TemplateApp {
             let mut avg: f32 = 0.0;
 
             for rating in &self.previous_bpm_ratings {
-                avg += rating;
+                avg += rating.bpm;
             }
 
             avg /= self.previous_bpm_ratings.len() as f32;
@@ -252,23 +261,58 @@ impl eframe::App for TemplateApp {
             // 60,000 / 120 = 500 ms per beat
             // 1 ms = 1,000,000 nanos
 
-
-            if self.previous_bpm_ratings.len() > self.prev_bpm_store_count {
-                self.previous_bpm_ratings.remove(0);
-            }
+            // if self.previous_bpm_ratings.len() > self.prev_bpm_store_count {
+            //     self.previous_bpm_ratings.remove(0);
+            // }
 
             #[cfg(debug_assertions)]
             ui.label(format!("DEBUG mousepos: {:?}", mousepos));
             #[cfg(debug_assertions)]
-            ui.label(format!("DEBUG x cord: {}, DEBUG diff check: {}", x, difference_check));
+            ui.label(format!(
+                "DEBUG x cord: {}, DEBUG diff check: {}",
+                x, difference_check
+            ));
 
             egui::warn_if_debug_build(ui);
         });
 
-        if false {
+        if self.previous_bpm_ratings.len() >= 30 {
             egui::Window::new("test").show(ctx, |ui| {
-                ui.label("This is a test window.");
+                // ui.label("This is a test window.");
+                #[cfg(debug_assertions)]
+                ui.label(format!(
+                    "DEBUG bpm rating count: {}",
+                    self.previous_bpm_ratings.len()
+                ));
+
+                let sin: PlotPoints = (0..self.previous_bpm_ratings.len())
+                    .map(|i| {
+                        let x = i as f64 * 1.0;
+                        let y: f64 = match self.previous_bpm_ratings.get(i) {
+                            None => 0.0,
+                            Some(f) => f.bpm as f64,
+                        };
+                        [x, y]
+                    })
+                    .collect();
+                let line = Line::new(sin);
+
+                Plot::new("my_plot").view_aspect(1.0).show(ui, |plot_ui| {
+                    plot_ui.line(line);
+                    plot_ui.hline(HLine::new(self.bpm_target as f64));
+                });
             });
+
+            // TODO: after displaying the plot, find largest one that differs from the line and display, also show average difference from the line.
+            // let highest: f32 = {
+            //     let mut max = self.previous_bpm_ratings.get(0).unwrap().bpm;
+            //     for bpm in self.previous_bpm_ratings {
+            //         if bpm.bpm > max.bpm {
+            //             max = bpm.bpm;
+            //         }
+            //     }
+            //     max.bpm
+            // };
         }
 
         if self.frames > 60 {
