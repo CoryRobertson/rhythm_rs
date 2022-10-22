@@ -1,6 +1,6 @@
 use eframe::emath::Align2;
 use eframe::epaint::{Color32, FontId, Pos2, Rect, Rounding, Stroke};
-use egui::plot::{HLine, Line, Plot, PlotPoints};
+use egui::plot::{Arrows, HLine, Line, Plot, PlotPoint, PlotPoints, Text, VLine};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -27,12 +27,15 @@ pub struct TemplateApp {
     #[serde(skip)]
     previous_bpm_ratings: Vec<BeatClick>,
 
+
     bpm_target: i32,
+
     epsilon: i32,
 
     #[serde(skip)]
     beat_total_count: usize,
 
+    #[serde(skip)]
     displaying_indicator: bool,
 }
 
@@ -53,7 +56,7 @@ impl Default for TemplateApp {
             beat_count: 0,
             previous_bpm_ratings: vec![],
             bpm_target: 120,
-            epsilon: 80,
+            epsilon: 40,
             beat_total_count: 30,
             displaying_indicator: true,
         }
@@ -74,6 +77,11 @@ impl TemplateApp {
 
         Default::default()
     }
+}
+
+fn reset(app: &mut TemplateApp) {
+    app.beat_count = 0;
+    app.previous_bpm_ratings.clear();
 }
 
 impl eframe::App for TemplateApp {
@@ -110,7 +118,13 @@ impl eframe::App for TemplateApp {
             #[cfg(debug_assertions)]
             ui.label(format!("DEBUG Beat count: {}", self.beat_count));
 
-            let prev_button_click = self.button_click_time;
+            #[cfg(debug_assertions)]
+            ui.label(format!(
+                "DEBUG Previous Difference: {}",
+                self.prev_difference
+            ));
+
+            let mut prev_button_click = self.button_click_time;
 
             let big_button = ui.add_sized([100.0, 50.0], egui::Button::new("Click"));
 
@@ -148,8 +162,9 @@ impl eframe::App for TemplateApp {
                 .unwrap_or_default()
                 .as_secs()
                 > 4
+                && self.previous_bpm_ratings.len() < self.beat_total_count - 1
             {
-                self.beat_count = 0;
+                reset(self);
             }
 
             ui.horizontal(|ui| {
@@ -167,22 +182,13 @@ impl eframe::App for TemplateApp {
                     .on_hover_text("The bpm to show the indicator at.");
             });
 
-            // ui.horizontal(|ui| {
-            //     ui.label("Avg Count:");
-            //     ui.add_space(8.0);
-            //     ui.add(egui::Slider::new(&mut self.beat_total_count, 2..=50))
-            //         .on_hover_text("The number of bpm ratings to keep to calculate the average.");
-            // });
-
             if ui.button("Reset").clicked() {
-                self.beat_count = 0;
-                self.previous_bpm_ratings.clear();
+                reset(self);
             }
 
-            //ui.checkbox(&mut self.displaying_indicator, "Display indicator: ");
-
+            // difference in time since the previous click and now
             let difference_check: i128 = {
-                let output = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
+                let mut output = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
                 if output > 10_000 {
                     10_000
                 } else {
@@ -190,11 +196,19 @@ impl eframe::App for TemplateApp {
                 }
             };
 
-            let bpm_ms = 60_000 / self.bpm_target; // 500 ms?
+            // number of milliseconds per beat that is expected
+            let bpm_ms = 60_000 / self.bpm_target; // 500 ms for 120
 
+            // location of the click indicator bar for when to click
             let click_offset = 300.0;
 
+            // location of the moving click indicator bar
             let x: f32 = { bpm_ms - difference_check as i32 + click_offset as i32 } as f32;
+
+            // if the user has not started, keep resting the bar so the user can start once they are ready
+            if self.previous_bpm_ratings.len() == 0 && x <= 0.0 {
+                self.button_click_time = wasm_timer::SystemTime::now();
+            }
 
             // rectangle object for the indicator bar, moves from right to left of screen towards the click rect.
             let indicator_rect =
@@ -206,6 +220,7 @@ impl eframe::App for TemplateApp {
                 Pos2::new(click_offset + 5.0, 300.0),
             );
 
+            // click indicator logic
             if self.displaying_indicator {
                 ui.painter().rect(
                     click_rect,
@@ -220,49 +235,51 @@ impl eframe::App for TemplateApp {
                     Color32::from_rgb(250, 50, 50),
                     Stroke::default(),
                 );
-            }
 
-            if (difference_check - (bpm_ms - (self.epsilon / 2)) as i128).abs()
-                < self.epsilon as i128
-                && self.displaying_indicator
-            {
-                let rect = Rect::from_two_pos(
-                    Pos2::new(click_offset, 200.0),
-                    Pos2::new(click_offset + 5.0, 300.0),
-                );
+                if (difference_check - (bpm_ms - (self.epsilon / 2)) as i128).abs()
+                    < self.epsilon as i128
+                {
+                    let rect = Rect::from_two_pos(
+                        Pos2::new(click_offset, 200.0),
+                        Pos2::new(click_offset + 5.0, 300.0),
+                    );
 
-                ui.painter().rect(
-                    rect,
-                    Rounding::default(),
-                    Color32::from_rgb(50, 200, 50),
-                    Stroke::default(),
-                );
+                    ui.painter().rect(
+                        rect,
+                        Rounding::default(),
+                        Color32::from_rgb(50, 200, 50),
+                        Stroke::default(),
+                    );
+                    ui.painter().text(
+                        Pos2::new(click_offset, 180.0),
+                        Align2::CENTER_BOTTOM,
+                        "Click now!",
+                        FontId::default(),
+                        Color32::from_rgb(250, 250, 250),
+                    );
+                }
+            } else {
+                let remaining = (self.beat_total_count - self.previous_bpm_ratings.len());
+
+                let text = {
+                    if remaining == 1 {
+                        format!("Keep clicking for {} more beat!", remaining)
+                    } else {
+                        format!("Keep clicking for {} more beats!", remaining)
+                    }
+                };
+
                 ui.painter().text(
-                    Pos2::new(click_offset, 180.0),
+                    Pos2::new(click_offset + 50.0, 180.0),
                     Align2::CENTER_BOTTOM,
-                    "Click now!",
+                    text,
                     FontId::default(),
                     Color32::from_rgb(250, 250, 250),
                 );
             }
-            else {
-                //TODO: display text to tell the user "keep clicking! and how many more beats they need to click for"
-            }
 
             #[cfg(debug_assertions)]
             ui.label(format!("DEBUG Previous BPM: {:.0}", self.bpm));
-
-            let mut avg: f32 = 0.0;
-
-            for rating in &self.previous_bpm_ratings {
-                avg += rating.bpm;
-            }
-
-            avg /= self.previous_bpm_ratings.len() as f32;
-
-            if !avg.is_nan() {
-                ui.label(format!("BPM Avg: {:.0}", avg));
-            }
 
             // 60,000 / 120 = 500 ms per beat
             // 1 ms = 1,000,000 nanos
@@ -283,7 +300,7 @@ impl eframe::App for TemplateApp {
         });
 
         if self.previous_bpm_ratings.len() >= 30 {
-            egui::Window::new("test").show(ctx, |ui| {
+            egui::Window::new("Stats Panel Name").show(ctx, |ui| {
                 // ui.label("This is a test window.");
                 #[cfg(debug_assertions)]
                 ui.label(format!(
@@ -301,24 +318,124 @@ impl eframe::App for TemplateApp {
                         [x, y]
                     })
                     .collect();
+
                 let line = Line::new(sin);
+
+                // the average difference from the target bpm
+                let average_deviation: f32 = {
+                    let mut avg = 0.0;
+                    for beat in &self.previous_bpm_ratings {
+                        avg += (beat.bpm - self.bpm_target as f32);
+                    }
+                    avg /= self.previous_bpm_ratings.len() as f32;
+                    avg
+                };
+
+                // highest difference found in the list of bpm clicks with index of selected beat
+                let highest_difference = {
+                    let mut max = self.previous_bpm_ratings.get(0).unwrap();
+
+                    let mut index = 0; // index of returned value
+                    let mut i = 0; // counter variable
+
+                    for beat in &self.previous_bpm_ratings {
+                        let bpm_diff = (beat.bpm - self.bpm_target as f32).abs();
+                        let highest_diff = (max.bpm - self.bpm_target as f32).abs();
+                        if bpm_diff > highest_diff {
+                            max = beat;
+                            index = i;
+                        }
+                        i += 1;
+                    }
+                    (max.bpm, index)
+                };
+
+                // lowest difference found in the list of bpm clicks with index of selected beat
+                let lowest_difference = {
+                    let mut lowest = self.previous_bpm_ratings.get(0).unwrap();
+
+                    let mut index = 0; // index of returned value
+                    let mut i = 0; // counter variable
+
+                    for beat in &self.previous_bpm_ratings {
+                        let bpm_diff = (beat.bpm - self.bpm_target as f32).abs();
+                        let lowest_diff = (lowest.bpm - self.bpm_target as f32).abs();
+                        if bpm_diff < lowest_diff {
+                            lowest = beat;
+                            index = i;
+                        }
+                        i += 1;
+                    }
+                    (lowest.bpm, index)
+                };
 
                 Plot::new("my_plot").view_aspect(1.0).show(ui, |plot_ui| {
                     plot_ui.line(line);
-                    plot_ui.hline(HLine::new(self.bpm_target as f64));
-                });
-            });
+                    plot_ui.hline(HLine::new(self.bpm_target as f64).color(Color32::from_rgb(52,83,127)));
+                    plot_ui.vline(VLine::new(10 as f64).color(Color32::from_rgb(212,64,0)));
+                    // 34537f
 
-            // TODO: after displaying the plot, find largest one that differs from the line and display, also show average difference from the line.
-            // let highest: f32 = {
-            //     let mut max = self.previous_bpm_ratings.get(0).unwrap().bpm;
-            //     for bpm in self.previous_bpm_ratings {
-            //         if bpm.bpm > max.bpm {
-            //             max = bpm.bpm;
-            //         }
-            //     }
-            //     max.bpm
-            // };
+                    // x, y form
+                    let worst_beat_text_pos =
+                        (highest_difference.1 - 5, highest_difference.0 + 30.0);
+                    let best_beat_text_pos = (lowest_difference.1 - 5, lowest_difference.0 + 30.0);
+                    // highest_difference.1 as f64, highest_difference.0 as f64
+                    let origins: Vec<[f64; 2]> = vec![
+                        [worst_beat_text_pos.0 as f64, worst_beat_text_pos.1 as f64],
+                        [best_beat_text_pos.0 as f64, best_beat_text_pos.1 as f64],
+                    ];
+                    let tips: Vec<[f64; 2]> = vec![
+                        [highest_difference.1 as f64, highest_difference.0 as f64],
+                        [lowest_difference.1 as f64, lowest_difference.0 as f64],
+                    ];
+                    plot_ui.arrows(Arrows::new(PlotPoints::new(origins), PlotPoints::new(tips)));
+
+                    plot_ui.text(
+                        Text::new(
+                            PlotPoint::new(worst_beat_text_pos.0, worst_beat_text_pos.1),
+                            "Worst beat",
+                        )
+                        .highlight(true)
+                        .color(Color32::from_rgb(250, 50, 50)),
+                    );
+
+                    plot_ui.text(
+                        Text::new(
+                            PlotPoint::new(best_beat_text_pos.0, best_beat_text_pos.1),
+                            "Best beat",
+                        )
+                        .highlight(true)
+                        .color(Color32::from_rgb(50, 250, 50)),
+                    );
+                });
+
+                let mut avg: f32 = 0.0;
+
+                for rating in &self.previous_bpm_ratings {
+                    avg += rating.bpm;
+                }
+
+                avg /= self.previous_bpm_ratings.len() as f32;
+
+                if !avg.is_nan() {
+                    ui.label(format!("BPM Avg: {:.0}", avg));
+                }
+
+                if average_deviation > 0.0 {
+                    ui.label(format!("Average deviation: +{:.0}", average_deviation));
+                } else {
+                    ui.label(format!("Average deviation: {:.0}", average_deviation));
+                }
+
+                ui.label(format!(
+                    "Worst beat: {:.0}, {}",
+                    highest_difference.0, highest_difference.1
+                ));
+                ui.label(format!(
+                    "Best beat: {:.0}, {}",
+                    lowest_difference.0, lowest_difference.1
+                ));
+            });
         }
 
         if self.frames > 60 {
