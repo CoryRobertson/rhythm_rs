@@ -29,7 +29,9 @@ pub struct TemplateApp {
 
     bpm_target: i32,
     epsilon: i32,
-    prev_bpm_store_count: usize,
+
+    #[serde(skip)]
+    beat_total_count: usize,
 
     displaying_indicator: bool,
 }
@@ -52,7 +54,7 @@ impl Default for TemplateApp {
             previous_bpm_ratings: vec![],
             bpm_target: 120,
             epsilon: 80,
-            prev_bpm_store_count: 10,
+            beat_total_count: 30,
             displaying_indicator: true,
         }
     }
@@ -98,6 +100,7 @@ impl eframe::App for TemplateApp {
             Some(a) => a,
         };
 
+        //TODO: have the program switch from showing this central panel to another central panel once the score screen is meant to be displayed
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(format!("Frame time: {:.05} seconds", delta));
 
@@ -135,7 +138,7 @@ impl eframe::App for TemplateApp {
                 self.beat_count += 1;
             }
 
-            // only display indicator if they havnt clicked 10 beats yet
+            // only display indicator if they haven't clicked 10 beats yet
             self.displaying_indicator = self.beat_count < 10;
 
             // reset beat count if they haven't clicked for a while
@@ -167,7 +170,7 @@ impl eframe::App for TemplateApp {
             // ui.horizontal(|ui| {
             //     ui.label("Avg Count:");
             //     ui.add_space(8.0);
-            //     ui.add(egui::Slider::new(&mut self.prev_bpm_store_count, 2..=50))
+            //     ui.add(egui::Slider::new(&mut self.beat_total_count, 2..=50))
             //         .on_hover_text("The number of bpm ratings to keep to calculate the average.");
             // });
 
@@ -242,6 +245,9 @@ impl eframe::App for TemplateApp {
                     Color32::from_rgb(250, 250, 250),
                 );
             }
+            else {
+                //TODO: display text to tell the user "keep clicking! and how many more beats they need to click for"
+            }
 
             #[cfg(debug_assertions)]
             ui.label(format!("DEBUG Previous BPM: {:.0}", self.bpm));
@@ -261,7 +267,7 @@ impl eframe::App for TemplateApp {
             // 60,000 / 120 = 500 ms per beat
             // 1 ms = 1,000,000 nanos
 
-            // if self.previous_bpm_ratings.len() > self.prev_bpm_store_count {
+            // if self.previous_bpm_ratings.len() > self.beat_total_count {
             //     self.previous_bpm_ratings.remove(0);
             // }
 
