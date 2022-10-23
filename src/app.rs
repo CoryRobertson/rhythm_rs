@@ -204,7 +204,7 @@ impl eframe::App for TemplateApp {
             let x: f32 = { bpm_ms - difference_check as i32 + click_offset as i32 } as f32;
 
             // if the user has not started, keep resting the bar so the user can start once they are ready
-            if self.previous_bpm_ratings.len() == 0 && x <= 0.0 {
+            if self.previous_bpm_ratings.is_empty() && x <= 0.0 {
                 self.button_click_time = wasm_timer::SystemTime::now();
             }
 
@@ -256,27 +256,25 @@ impl eframe::App for TemplateApp {
                         Color32::from_rgb(250, 250, 250),
                     );
                 }
-            } else {
-                if self.previous_bpm_ratings.len() < self.beat_total_count {
-                    let remaining: i32 =
-                        (self.beat_total_count - self.previous_bpm_ratings.len()) as i32;
+            } else if self.previous_bpm_ratings.len() < self.beat_total_count {
+                let remaining: i32 =
+                    (self.beat_total_count - self.previous_bpm_ratings.len()) as i32;
 
-                    let text = {
-                        if remaining == 1 {
-                            format!("Keep clicking for {} more beat!", remaining)
-                        } else {
-                            format!("Keep clicking for {} more beats!", remaining)
-                        }
-                    };
+                let text = {
+                    if remaining == 1 {
+                        format!("Keep clicking for {} more beat!", remaining)
+                    } else {
+                        format!("Keep clicking for {} more beats!", remaining)
+                    }
+                };
 
-                    ui.painter().text(
-                        Pos2::new(click_offset + 50.0, 180.0),
-                        Align2::CENTER_BOTTOM,
-                        text,
-                        FontId::default(),
-                        Color32::from_rgb(250, 250, 250),
-                    );
-                }
+                ui.painter().text(
+                    Pos2::new(click_offset + 50.0, 180.0),
+                    Align2::CENTER_BOTTOM,
+                    text,
+                    FontId::default(),
+                    Color32::from_rgb(250, 250, 250),
+                );
             }
 
             #[cfg(debug_assertions)]
@@ -336,17 +334,16 @@ impl eframe::App for TemplateApp {
                 let highest_difference = {
                     let mut max = self.previous_bpm_ratings.get(0).unwrap();
 
-                    let mut index = 0; // index of returned value
-                    let mut i = 0; // counter variable
+                    let mut index: i32 = 0; // index of returned value
+                                            //let mut i = 0; // counter variable
 
-                    for beat in &self.previous_bpm_ratings {
+                    for (i, beat) in self.previous_bpm_ratings.iter().enumerate() {
                         let bpm_diff = (beat.bpm - self.bpm_target as f32).abs();
                         let highest_diff = (max.bpm - self.bpm_target as f32).abs();
                         if bpm_diff > highest_diff {
                             max = beat;
-                            index = i;
+                            index = i as i32;
                         }
-                        i += 1;
                     }
                     (max.bpm, index)
                 };
@@ -355,17 +352,17 @@ impl eframe::App for TemplateApp {
                 let lowest_difference = {
                     let mut lowest = self.previous_bpm_ratings.get(0).unwrap();
 
-                    let mut index = 0; // index of returned value
-                    let mut i = 0; // counter variable
+                    let mut index: i32 = 0; // index of returned value
+                                            //let mut i = 0; // counter variable
 
-                    for beat in &self.previous_bpm_ratings {
+                    for (i, beat) in self.previous_bpm_ratings.iter().enumerate() {
                         let bpm_diff = (beat.bpm - self.bpm_target as f32).abs();
                         let lowest_diff = (lowest.bpm - self.bpm_target as f32).abs();
                         if bpm_diff < lowest_diff {
                             lowest = beat;
-                            index = i;
+                            index = i as i32;
                         }
-                        i += 1;
+                        // i += 1;
                     }
                     (lowest.bpm, index)
                 };
@@ -375,7 +372,7 @@ impl eframe::App for TemplateApp {
                     plot_ui.hline(
                         HLine::new(self.bpm_target as f64).color(Color32::from_rgb(52, 83, 127)),
                     );
-                    plot_ui.vline(VLine::new(10 as f64).color(Color32::from_rgb(212, 64, 0)));
+                    plot_ui.vline(VLine::new(10_f64).color(Color32::from_rgb(212, 64, 0)));
                     // 34537f
 
                     // x, y form
@@ -395,7 +392,10 @@ impl eframe::App for TemplateApp {
 
                     plot_ui.text(
                         Text::new(
-                            PlotPoint::new(worst_beat_text_pos.0, worst_beat_text_pos.1),
+                            PlotPoint::new(
+                                worst_beat_text_pos.0 as f64,
+                                worst_beat_text_pos.1 as f64,
+                            ),
                             "Worst beat",
                         )
                         .highlight(true)
@@ -404,7 +404,10 @@ impl eframe::App for TemplateApp {
 
                     plot_ui.text(
                         Text::new(
-                            PlotPoint::new(best_beat_text_pos.0, best_beat_text_pos.1),
+                            PlotPoint::new(
+                                best_beat_text_pos.0 as f64,
+                                best_beat_text_pos.1 as f64,
+                            ),
                             "Best beat",
                         )
                         .highlight(true)
