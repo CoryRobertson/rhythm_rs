@@ -27,7 +27,6 @@ pub struct TemplateApp {
     #[serde(skip)]
     previous_bpm_ratings: Vec<BeatClick>,
 
-
     bpm_target: i32,
 
     epsilon: i32,
@@ -41,8 +40,8 @@ pub struct TemplateApp {
 
 struct BeatClick {
     bpm: f32,
-    was_displaying_indicator: bool,
-    time_of_beat: wasm_timer::SystemTime,
+    _was_displaying_indicator: bool,
+    _time_of_beat: wasm_timer::SystemTime,
 }
 
 impl Default for TemplateApp {
@@ -108,7 +107,6 @@ impl eframe::App for TemplateApp {
             Some(a) => a,
         };
 
-        //TODO: have the program switch from showing this central panel to another central panel once the score screen is meant to be displayed
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(format!("Frame time: {:.05} seconds", delta));
 
@@ -124,7 +122,7 @@ impl eframe::App for TemplateApp {
                 self.prev_difference
             ));
 
-            let mut prev_button_click = self.button_click_time;
+            let prev_button_click = self.button_click_time;
 
             let big_button = ui.add_sized([100.0, 50.0], egui::Button::new("Click"));
 
@@ -146,8 +144,8 @@ impl eframe::App for TemplateApp {
                 println!("{}", self.bpm);
                 self.previous_bpm_ratings.push(BeatClick {
                     bpm: self.bpm as f32,
-                    was_displaying_indicator: self.displaying_indicator,
-                    time_of_beat: self.button_click_time,
+                    _was_displaying_indicator: self.displaying_indicator,
+                    _time_of_beat: self.button_click_time,
                 });
                 self.beat_count += 1;
             }
@@ -188,7 +186,7 @@ impl eframe::App for TemplateApp {
 
             // difference in time since the previous click and now
             let difference_check: i128 = {
-                let mut output = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
+                let output = now.duration_since(prev_button_click).unwrap().as_millis() as i128;
                 if output > 10_000 {
                     10_000
                 } else {
@@ -259,23 +257,26 @@ impl eframe::App for TemplateApp {
                     );
                 }
             } else {
-                let remaining = (self.beat_total_count - self.previous_bpm_ratings.len());
+                if self.previous_bpm_ratings.len() < self.beat_total_count {
+                    let remaining: i32 =
+                        (self.beat_total_count - self.previous_bpm_ratings.len()) as i32;
 
-                let text = {
-                    if remaining == 1 {
-                        format!("Keep clicking for {} more beat!", remaining)
-                    } else {
-                        format!("Keep clicking for {} more beats!", remaining)
-                    }
-                };
+                    let text = {
+                        if remaining == 1 {
+                            format!("Keep clicking for {} more beat!", remaining)
+                        } else {
+                            format!("Keep clicking for {} more beats!", remaining)
+                        }
+                    };
 
-                ui.painter().text(
-                    Pos2::new(click_offset + 50.0, 180.0),
-                    Align2::CENTER_BOTTOM,
-                    text,
-                    FontId::default(),
-                    Color32::from_rgb(250, 250, 250),
-                );
+                    ui.painter().text(
+                        Pos2::new(click_offset + 50.0, 180.0),
+                        Align2::CENTER_BOTTOM,
+                        text,
+                        FontId::default(),
+                        Color32::from_rgb(250, 250, 250),
+                    );
+                }
             }
 
             #[cfg(debug_assertions)]
@@ -325,7 +326,7 @@ impl eframe::App for TemplateApp {
                 let average_deviation: f32 = {
                     let mut avg = 0.0;
                     for beat in &self.previous_bpm_ratings {
-                        avg += (beat.bpm - self.bpm_target as f32);
+                        avg += beat.bpm - self.bpm_target as f32;
                     }
                     avg /= self.previous_bpm_ratings.len() as f32;
                     avg
@@ -371,8 +372,10 @@ impl eframe::App for TemplateApp {
 
                 Plot::new("my_plot").view_aspect(1.0).show(ui, |plot_ui| {
                     plot_ui.line(line);
-                    plot_ui.hline(HLine::new(self.bpm_target as f64).color(Color32::from_rgb(52,83,127)));
-                    plot_ui.vline(VLine::new(10 as f64).color(Color32::from_rgb(212,64,0)));
+                    plot_ui.hline(
+                        HLine::new(self.bpm_target as f64).color(Color32::from_rgb(52, 83, 127)),
+                    );
+                    plot_ui.vline(VLine::new(10 as f64).color(Color32::from_rgb(212, 64, 0)));
                     // 34537f
 
                     // x, y form
