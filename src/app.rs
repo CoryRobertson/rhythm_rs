@@ -126,6 +126,18 @@ impl eframe::App for TemplateApp {
 
             let big_button = ui.add_sized([100.0, 50.0], egui::Button::new("Click"));
 
+            #[cfg(debug_assertions)]
+            if ui.button("Perfect beat").clicked() {
+                println!("perfect beat clicked");
+                self.button_click_time = wasm_timer::SystemTime::now();
+                self.previous_bpm_ratings.push(BeatClick {
+                    bpm: self.bpm_target as f32,
+                    _was_displaying_indicator: self.displaying_indicator,
+                    _time_of_beat: self.button_click_time,
+                });
+                self.beat_count += 1;
+            }
+
             // button for player to click to detect bpm of click rate
             if big_button.clicked() {
                 self.button_click_time = wasm_timer::SystemTime::now();
@@ -320,15 +332,15 @@ impl eframe::App for TemplateApp {
 
                 let line = Line::new(sin);
 
+                let avg: f32 = self
+                    .previous_bpm_ratings
+                    .iter()
+                    .map(|beat_click| beat_click.bpm)
+                    .sum::<f32>()
+                    / self.previous_bpm_ratings.len() as f32; // the avg bpm of all the beat clicks
+
                 // the average difference from the target bpm
-                let average_deviation: f32 = {
-                    let mut avg = 0.0;
-                    for beat in &self.previous_bpm_ratings {
-                        avg += beat.bpm - self.bpm_target as f32;
-                    }
-                    avg /= self.previous_bpm_ratings.len() as f32;
-                    avg
-                };
+                let average_deviation: f32 = avg - self.bpm_target as f32;
 
                 // highest difference found in the list of bpm clicks with index of selected beat
                 let highest_difference = {
@@ -367,6 +379,24 @@ impl eframe::App for TemplateApp {
                     (lowest.bpm, index)
                 };
 
+                // the score for the player, lower is better??
+                let score: f32 = {
+                    // get a slice of the last 30 ratings, so the user can improve their score if they keep clicking.
+                    let slice_of_ratings = &self.previous_bpm_ratings
+                        [self.previous_bpm_ratings.len() - 30..self.previous_bpm_ratings.len()];
+                    let it: f32 = slice_of_ratings
+                        .iter()
+                        .map(|beat_click| {
+                            let distance: f32 =
+                                (beat_click.bpm - self.bpm_target as f32).abs() / 10.0;
+                            // maybe instead of mapping to the distance we could instead map to the distance from the target, and
+                            // then subtract that from a score?
+                            distance
+                        })
+                        .sum();
+                    it
+                };
+
                 Plot::new("my_plot").view_aspect(1.0).show(ui, |plot_ui| {
                     plot_ui.line(line);
                     plot_ui.hline(
@@ -379,6 +409,7 @@ impl eframe::App for TemplateApp {
                     let worst_beat_text_pos =
                         (highest_difference.1 - 5, highest_difference.0 + 30.0);
                     let best_beat_text_pos = (lowest_difference.1 - 5, lowest_difference.0 + 30.0);
+
                     // highest_difference.1 as f64, highest_difference.0 as f64
                     let origins: Vec<[f64; 2]> = vec![
                         [worst_beat_text_pos.0 as f64, worst_beat_text_pos.1 as f64],
@@ -415,14 +446,6 @@ impl eframe::App for TemplateApp {
                     );
                 });
 
-                let mut avg: f32 = 0.0;
-
-                for rating in &self.previous_bpm_ratings {
-                    avg += rating.bpm;
-                }
-
-                avg /= self.previous_bpm_ratings.len() as f32;
-
                 if !avg.is_nan() {
                     ui.label(format!("BPM Avg: {:.0}", avg));
                 }
@@ -432,6 +455,8 @@ impl eframe::App for TemplateApp {
                 } else {
                     ui.label(format!("Average deviation: {:.0}", average_deviation));
                 }
+
+                ui.label(format!("Score (lower is better): {:.2}", score));
 
                 ui.label(format!(
                     "Worst beat: {:.0}, {}",
